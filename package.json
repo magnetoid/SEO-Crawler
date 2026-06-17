@@ -1,0 +1,21 @@
+{
+  "name": "seo-tester",
+  "version": "2.0.0",
+  "description": "Self-hosted SEO spider and structured-data validator: crawl a site and audit on-page SEO, schema.org, and Google Rich Results.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test",
+    "build-vocab": "node scripts/build-vocab.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "linkedom": "^0.18.4"
+  },
+  "dependencies": {
+    "chrome-launcher": "^1.2.1",
+    "lighthouse": "^13.4.0"
+  }
+}

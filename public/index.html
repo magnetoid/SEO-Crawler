@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SEO Tester — Crawler &amp; Structured Data Validator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,400;0,600;0,700;0,800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap brandbar">
+      <a class="brand" href="/">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="28" height="28">
+            <rect x="16" y="2.5" width="19" height="19" transform="rotate(45 16 16)" fill="none" stroke="currentColor" stroke-width="2.4"/>
+            <rect x="16" y="9" width="9.9" height="9.9" transform="rotate(45 16 16)" fill="currentColor"/>
+          </svg>
+        </span>
+        <span class="brand-name">SEO&nbsp;Tester</span>
+      </a>
+      <span class="brand-meta">Crawler &amp; Structured Data Validator</span>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="wrap">
+      <h1>Crawl &amp; Audit Your Site</h1>
+      <p class="tagline">Spider a whole site, then test titles, meta, headings, canonicals, directives, links, images &amp; structured data — against schema.org and Google Rich Results.</p>
+    </div>
+  </section>
+
+  <main class="wrap">
+    <section class="panel">
+      <nav class="tabs" role="tablist" aria-label="Input mode">
+        <button class="tab is-active" data-tab="crawl" role="tab" aria-selected="true">Crawl Site</button>
+        <button class="tab" data-tab="url" role="tab" aria-selected="false">Single URL</button>
+        <button class="tab" data-tab="sitemap" role="tab" aria-selected="false">Sitemap</button>
+        <button class="tab" data-tab="html" role="tab" aria-selected="false">Paste HTML</button>
+      </nav>
+
+      <div class="tab-panel is-active" data-panel="crawl">
+        <label for="crawl-url">Start URL — the spider follows internal links from here:</label>
+        <input id="crawl-url" type="url" inputmode="url" placeholder="https://example.com">
+        <div class="opts">
+          <span class="opt"><label for="crawl-max">Max pages</label><input id="crawl-max" type="number" min="1" value="100"></span>
+          <span class="opt"><label for="crawl-depth">Max depth</label><input id="crawl-depth" type="number" min="0" value="10"></span>
+          <span class="opt"><label for="crawl-conc">Concurrency</label><input id="crawl-conc" type="number" min="1" max="10" value="5"></span>
+          <span class="opt opt-check"><input id="crawl-ext" type="checkbox"><label for="crawl-ext">Check external links</label></span>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-panel="url" hidden>
+        <label for="url-input">Page URL to fetch and audit:</label>
+        <input id="url-input" type="url" inputmode="url" placeholder="https://example.com/article">
+      </div>
+
+      <div class="tab-panel" data-panel="sitemap" hidden>
+        <label for="sitemap-url-input">Sitemap URL, or paste sitemap XML below:</label>
+        <input id="sitemap-url-input" type="url" inputmode="url" placeholder="https://example.com/sitemap.xml">
+        <textarea id="sitemap-xml-input" spellcheck="false" placeholder="…or paste &lt;urlset&gt; XML here"></textarea>
+        <div class="opts">
+          <span class="opt"><label for="max-urls">Max pages (blank = all)</label><input id="max-urls" type="number" min="1" placeholder="all"></span>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-panel="html" hidden>
+        <label for="html-input">Paste a full page or a snippet of HTML:</label>
+        <textarea id="html-input" spellcheck="false" placeholder="&lt;html&gt; … &lt;/html&gt;"></textarea>
+      </div>
+
+      <div class="actions">
+        <button id="run-btn" class="primary">Run audit</button>
+        <button id="stop-btn" class="ghost" hidden>Stop</button>
+        <span id="status" class="status" role="status" aria-live="polite"></span>
+      </div>
+    </section>
+
+    <section id="dashboard" class="dashboard" hidden></section>
+    <section id="views" class="views" hidden></section>
+    <section id="results" class="results" aria-live="polite"></section>
+    <section id="schema-page" class="schema-page" hidden></section>
+    <section id="pagespeed-page" class="pagespeed-page" hidden></section>
+  </main>
+
+  <div id="drawer" class="drawer" hidden>
+    <div class="drawer-backdrop" data-close></div>
+    <aside class="drawer-panel" role="dialog" aria-label="Page detail">
+      <button class="drawer-close" data-close aria-label="Close">×</button>
+      <div id="drawer-body"></div>
+    </aside>
+  </div>
+
+  <footer class="site-footer wrap">
+    <p>
+      Crawls in-browser via a local proxy. Structured-data checks use schema.org
+      <span id="vocab-version">latest</span> and Google Rich Results guidance.
+    </p>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
