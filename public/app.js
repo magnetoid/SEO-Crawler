@@ -672,6 +672,7 @@ function renderSchemaPage(rec) {
   if (/^https?:/.test(rec.url)) { url.href = rec.url; url.target = '_blank'; url.rel = 'noopener noreferrer'; }
   hero.append(url);
   hero.append(validatorActions(rec.url));
+  hero.append(aiActions('Ask AI to check all structured data on this page:', () => pagePrompt(rec)));
   page.append(hero);
 
   page.append(schemaOverview(rec));
@@ -685,8 +686,88 @@ function renderSchemaPage(rec) {
     page.append(el('div', 'notice muted', 'No JSON-LD, Microdata, or RDFa found on this page.'));
     return page;
   }
-  rec.schema.reports.forEach((report, i) => page.append(renderSchemaCard(report, i)));
+  rec.schema.reports.forEach((report, i) => page.append(renderSchemaCard(report, i, rec)));
   return page;
+}
+
+// --- "Ask AI" integration -----------------------------------------------------
+
+const AI_PROVIDERS = [
+  { id: 'claude', label: 'Ask Claude', prefill: (q) => `https://claude.ai/new?q=${encodeURIComponent(q)}`, base: 'https://claude.ai/new' },
+  { id: 'chatgpt', label: 'Ask ChatGPT', prefill: (q) => `https://chatgpt.com/?q=${encodeURIComponent(q)}`, base: 'https://chatgpt.com/' },
+  // Gemini has no reliable prompt-prefill param, so we always rely on the clipboard.
+  { id: 'gemini', label: 'Ask Gemini', prefill: null, base: 'https://gemini.google.com/app' },
+];
+
+// A row of Ask-Claude/ChatGPT/Gemini buttons. promptFn is called lazily on click.
+function aiActions(label, promptFn) {
+  const wrap = el('div', 'ai-actions');
+  wrap.append(el('span', 'ai-actions-label', label));
+  const row = el('div', 'ai-buttons');
+  for (const p of AI_PROVIDERS) {
+    const b = el('button', `ai-btn ai-${p.id}`, p.label);
+    b.addEventListener('click', (e) => { e.stopPropagation(); askAi(p, promptFn()); });
+    row.append(b);
+  }
+  wrap.append(row);
+  return wrap;
+}
+
+async function askAi(provider, prompt) {
+  // Always put the full prompt on the clipboard so nothing is lost to URL limits.
+  let copied = false;
+  try { await navigator.clipboard.writeText(prompt); copied = true; } catch { /* not a secure context */ }
+  // Prefill the chat where supported and short enough; otherwise open the bare app.
+  let url = provider.base;
+  if (provider.prefill) {
+    const withPrompt = provider.prefill(prompt);
+    if (withPrompt.length <= 8000) url = withPrompt;
+  }
+  window.open(url, '_blank', 'noopener');
+  toast(copied
+    ? `Prompt copied to clipboard — paste it into ${provider.label.replace('Ask ', '')} if it isn't pre-filled.`
+    : `Opened ${provider.label.replace('Ask ', '')} — copy the schema from "View raw source".`);
+}
+
+// Prompt for a single structured-data item.
+function itemPrompt(rec, item, result) {
+  const lines = [
+    `Review this schema.org structured-data item${rec?.url ? ` from ${rec.url}` : ''}.`,
+    'Tell me: (1) is it valid per schema.org and Google Rich Results? (2) what is wrong or missing? (3) how do I fix and improve it?',
+    '',
+    `Format: ${formatLabel(item.format)} · Type: ${(item.types || []).join(', ') || '(none)'}`,
+  ];
+  const findings = [...(result?.errors || []), ...(result?.warnings || [])].map((f) => `- ${f.message}`);
+  if (findings.length) lines.push('', 'Issues my validator already found:', ...findings);
+  lines.push('', '```json', item.source || item.raw || '', '```');
+  return lines.join('\n');
+}
+
+// Prompt covering every structured-data item on the page.
+function pagePrompt(rec) {
+  const blocks = (rec.schema?.reports || [])
+    .map((r, i) => `// item ${i + 1} — ${formatLabel(r.item.format)} · ${(r.item.types || []).join(', ') || '(no type)'}\n${r.item.source || ''}`)
+    .join('\n\n');
+  return [
+    'Check ALL the structured data on this web page for validity and correctness against schema.org and Google Rich Results.',
+    `URL: ${rec.url}`,
+    'Tell me which items are valid, which have problems, exactly what is wrong, and how to fix each one.',
+    '',
+    '```json',
+    blocks,
+    '```',
+  ].join('\n');
+}
+
+// Lightweight transient toast.
+let toastTimer = null;
+function toast(message) {
+  let t = $('#toast');
+  if (!t) { t = el('div'); t.id = 'toast'; t.className = 'toast'; document.body.append(t); }
+  t.textContent = message;
+  t.classList.add('is-visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('is-visible'), 5000);
 }
 
 // One-click links to external validators for the page URL.
@@ -745,7 +826,7 @@ function schemaOverview(rec) {
 }
 
 // One structured-data item: type, data tree, validation findings, raw source.
-function renderSchemaCard({ item, result }, index) {
+function renderSchemaCard({ item, result }, index, rec) {
   const card = el('div', 'schema-card');
   const head = el('div', 'item-head');
   head.append(el('span', 'schema-index', `#${index + 1}`));
@@ -753,6 +834,14 @@ function renderSchemaCard({ item, result }, index) {
   head.append(el('span', 'item-type', (item.types && item.types.join(', ')) || (item.parseError ? '(parse error)' : '(no type)')));
   head.append(badge(`${result.errors.length} err`, result.errors.length ? 'error' : 'muted'));
   head.append(badge(`${result.warnings.length} warn`, result.warnings.length ? 'warn' : 'muted'));
+  // Per-item Ask-AI buttons, pinned to the right.
+  const ai = el('div', 'ai-buttons ai-buttons-inline');
+  for (const p of AI_PROVIDERS) {
+    const b = el('button', `ai-btn ai-${p.id}`, p.label);
+    b.addEventListener('click', (e) => { e.stopPropagation(); askAi(p, itemPrompt(rec, item, result)); });
+    ai.append(b);
+  }
+  head.append(ai);
   card.append(head);
 
   for (const ti of result.typeInfo || []) {

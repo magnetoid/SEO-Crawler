@@ -5,17 +5,24 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test",
-    "build-vocab": "node scripts/build-vocab.mjs"
+    "build": "npx tsc",
+    "test": "npm run build && node --test dist/test/**/*.test.js",
+    "build-vocab": "node scripts/build-vocab.mjs",
+    "update-rules": "node scripts/build-vocab.mjs && node scripts/update-google-rules.mjs"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
-    "linkedom": "^0.18.4"
+    "@types/node": "^25.9.3",
+    "linkedom": "^0.18.4",
+    "schema-dts": "^2.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
   },
   "dependencies": {
     "chrome-launcher": "^1.2.1",
+    "googleapis": "^173.0.0",
     "lighthouse": "^13.4.0"
   }
 }

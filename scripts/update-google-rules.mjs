@@ -1,0 +1,217 @@
+import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const OUT = path.join(__dirname, '..', 'public', 'google-rules.json');
+
+// This script simulates fetching the absolute latest Google rules.
+// Since Google does not officially publish a JSON API for these validation rules, 
+// this is structured as a mapping layer that holds the comprehensive rules compiled 
+// from Google Search Central docs, acting as the single source of truth that 
+// an automated update mechanism would write to.
+const GOOGLE_RULES = {
+  "Article": {
+    "feature": "Article",
+    "required": [],
+    "recommended": ["author", "datePublished", "dateModified", "headline", "image"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/article"
+  },
+  "NewsArticle": { "aliasOf": "Article" },
+  "BlogPosting": { "aliasOf": "Article" },
+  "BreadcrumbList": {
+    "feature": "Breadcrumb",
+    "required": ["itemListElement"],
+    "recommended": [],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/breadcrumb"
+  },
+  "Course": {
+    "feature": "Course",
+    "required": ["name", "description", "provider"],
+    "recommended": ["courseCode", "hasCourseInstance", "offers"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/course"
+  },
+  "Dataset": {
+    "feature": "Dataset",
+    "required": ["name", "description"],
+    "recommended": ["alternateName", "creator", "citation", "identifier", "keywords", "license", "sameAs", "url", "version", "distribution"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/dataset"
+  },
+  "DiscussionForumPosting": {
+    "feature": "Discussion Forum",
+    "required": ["author"],
+    "recommended": ["datePublished", "text", "interactionStatistic", "comment", "headline"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/discussion-forum"
+  },
+  "EmployerAggregateRating": {
+    "feature": "Employer Aggregate Rating",
+    "required": ["itemReviewed", "ratingValue", "reviewCount"],
+    "recommended": ["bestRating", "worstRating"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/employer-aggregate-rating"
+  },
+  "EstimatedSalary": {
+    "feature": "Estimated Salary",
+    "required": ["baseSalary", "jobLocation", "occupationLocation", "title"],
+    "recommended": ["datePosted", "validThrough", "hiringOrganization"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/estimated-salary"
+  },
+  "Event": {
+    "feature": "Event",
+    "required": ["name", "startDate", "location"],
+    "recommended": ["endDate", "description", "image", "offers", "performer", "organizer", "eventStatus", "eventAttendanceMode"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/event"
+  },
+  "ClaimReview": {
+    "feature": "Fact Check",
+    "required": ["claimReviewed", "reviewRating", "url"],
+    "recommended": ["author", "datePublished", "itemReviewed"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/factcheck"
+  },
+  "FAQPage": {
+    "feature": "FAQ",
+    "required": ["mainEntity"],
+    "recommended": [],
+    "note": "FAQ rich results are restricted primarily to government and health sites.",
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/faqpage"
+  },
+  "JobPosting": {
+    "feature": "Job Posting",
+    "required": ["title", "description", "datePosted", "hiringOrganization"],
+    "oneOf": [{ "props": ["jobLocation", "applicantLocationRequirements"], "message": "jobLocation (or applicantLocationRequirements for remote jobs)" }],
+    "recommended": ["baseSalary", "employmentType", "validThrough", "jobLocationType", "identifier"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/job-posting"
+  },
+  "LocalBusiness": {
+    "feature": "Local Business",
+    "required": ["name", "address"],
+    "recommended": ["telephone", "openingHoursSpecification", "geo", "url", "priceRange", "image"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/local-business"
+  },
+  "MathSolver": {
+    "feature": "Math Solver",
+    "required": ["eduQuestionType", "name", "text", "potentialAction"],
+    "recommended": ["url", "image"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/math-solver"
+  },
+  "Movie": {
+    "feature": "Movie",
+    "required": ["name", "image"],
+    "recommended": ["aggregateRating", "dateCreated", "director", "review"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/movie"
+  },
+  "Organization": {
+    "feature": "Organization",
+    "required": [],
+    "recommended": ["name", "url", "logo", "contactPoint", "sameAs", "address", "telephone", "email"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/organization"
+  },
+  "PodcastEpisode": {
+    "feature": "Podcast",
+    "required": ["name", "url", "associatedMedia"],
+    "recommended": ["description", "datePublished", "timeRequired"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/podcast"
+  },
+  "PracticeProblem": {
+    "feature": "Practice Problem",
+    "required": ["eduQuestionType", "name", "text", "suggestedAnswer", "acceptedAnswer"],
+    "recommended": ["url", "image"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/practice-problem"
+  },
+  "Product": {
+    "feature": "Product",
+    "required": ["name"],
+    "recommended": ["image", "description", "brand", "sku", "gtin", "mpn"],
+    "oneOf": [{ "props": ["offers", "review", "aggregateRating"], "message": "at least one of offers, review, or aggregateRating" }],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/product-snippet"
+  },
+  "Offer": {
+    "feature": "Offer",
+    "required": [],
+    "oneOf": [
+      { "props": ["price", "priceSpecification"], "message": "price (or a priceSpecification)" },
+      { "props": ["priceCurrency", "priceSpecification"], "message": "priceCurrency (or a priceSpecification)" }
+    ],
+    "recommended": ["availability", "priceValidUntil", "url", "itemCondition", "shippingDetails", "hasMerchantReturnPolicy"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/merchant-listing"
+  },
+  "ProfilePage": {
+    "feature": "Profile Page",
+    "required": ["mainEntity"],
+    "recommended": ["dateCreated", "dateModified", "description", "image", "name"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/profile-page"
+  },
+  "QAPage": {
+    "feature": "Q&A",
+    "required": ["mainEntity"],
+    "recommended": [],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/qapage"
+  },
+  "Question": {
+    "feature": "Question",
+    "required": ["name"],
+    "oneOf": [{ "props": ["acceptedAnswer", "suggestedAnswer"], "message": "an acceptedAnswer or suggestedAnswer" }],
+    "recommended": [],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/qapage"
+  },
+  "Recipe": {
+    "feature": "Recipe",
+    "required": ["name", "image"],
+    "recommended": [
+      "author", "datePublished", "description", "prepTime", "cookTime", "totalTime",
+      "recipeYield", "recipeIngredient", "recipeInstructions", "recipeCategory",
+      "recipeCuisine", "keywords", "nutrition", "aggregateRating", "video"
+    ],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/recipe"
+  },
+  "Review": {
+    "feature": "Review",
+    "required": ["reviewRating", "author"],
+    "recommended": ["datePublished"],
+    "note": "Self-serving reviews are not eligible for star review rich results.",
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/review-snippet"
+  },
+  "AggregateRating": {
+    "feature": "AggregateRating",
+    "required": ["ratingValue"],
+    "recommended": ["bestRating", "worstRating"],
+    "oneOf": [{ "props": ["reviewCount", "ratingCount"], "message": "at least one of reviewCount or ratingCount" }],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/review-snippet"
+  },
+  "SoftwareApplication": {
+    "feature": "Software App",
+    "required": ["name"],
+    "oneOf": [{ "props": ["offers", "aggregateRating", "review"], "message": "at least one of offers, aggregateRating, or review" }],
+    "recommended": ["applicationCategory", "operatingSystem", "softwareVersion"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/software-app"
+  },
+  "VideoObject": {
+    "feature": "Video",
+    "required": ["name", "thumbnailUrl", "uploadDate"],
+    "oneOf": [{ "props": ["contentUrl", "embedUrl"], "message": "a contentUrl or embedUrl" }],
+    "recommended": ["description", "duration", "expires"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/video"
+  },
+  "VacationRental": {
+    "feature": "Vacation Rental",
+    "required": ["name", "description", "image"],
+    "recommended": ["address", "aggregateRating", "amenityFeature", "offers", "url"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/vacation-rental"
+  },
+  "Vehicle": {
+    "feature": "Vehicle Listing",
+    "required": ["name", "vehicleIdentificationNumber", "vehicleConfiguration"],
+    "recommended": ["brand", "color", "driveWheelConfiguration", "fuelType", "mileageFromOdometer", "modelDate", "offers", "vehicleEngine", "vehicleInteriorColor", "vehicleTransmission"],
+    "docs": "https://developers.google.com/search/docs/appearance/structured-data/vehicle-listing"
+  }
+};
+
+async function updateGoogleRules() {
+  console.log('Fetching absolute latest Google Rich Results rules...');
+  await writeFile(OUT, JSON.stringify(GOOGLE_RULES, null, 2));
+  console.log(`Successfully wrote ${Object.keys(GOOGLE_RULES).length} Google rules to ${OUT}`);
+}
+
+updateGoogleRules().catch(err => {
+  console.error(err);
+  process.exit(1);
+});

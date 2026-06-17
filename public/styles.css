@@ -426,3 +426,31 @@ button.ghost:hover { border-color: var(--brand); color: var(--brand); }
 .ps-audit-why { font-size: .85rem; color: var(--ink-soft); line-height: 1.5; margin: .4rem 0; }
 .ps-audit-tips { margin: .3rem 0 0; padding-left: 1.1rem; }
 .ps-audit-tips li { font-size: .84rem; margin: .25rem 0; line-height: 1.45; }
+
+/* ===== Ask-AI buttons & toast ===== */
+.ai-actions { margin-top: 1rem; display: flex; flex-direction: column; gap: .4rem; }
+.ai-actions-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #c9cacb; }
+.ai-buttons { display: flex; flex-wrap: wrap; gap: .4rem; }
+.ai-buttons-inline { margin-left: auto; }
+.ai-btn {
+  appearance: none; cursor: pointer; border-radius: 0; font-family: var(--font);
+  font-weight: 700; font-size: .68rem; text-transform: uppercase; letter-spacing: .05em;
+  padding: .4rem .7rem; border: 1px solid var(--line-strong); background: #fff; color: var(--ink);
+  white-space: nowrap; transition: background .12s ease, color .12s ease, border-color .12s ease;
+}
+.ai-btn:hover { border-color: var(--brand); color: var(--brand); }
+/* In the dark hero, give them light outlines. */
+.schema-hero .ai-btn { background: transparent; color: #fff; border-color: rgba(255,255,255,.4); }
+.schema-hero .ai-btn:hover { background: #fff; color: var(--ink); border-color: #fff; }
+.ai-claude { border-left: 3px solid #d97757; }
+.ai-chatgpt { border-left: 3px solid #10a37f; }
+.ai-gemini { border-left: 3px solid #4285f4; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
+  background: var(--ink); color: #fff; padding: .8rem 1.2rem; font-size: .85rem; font-weight: 600;
+  box-shadow: 0 8px 30px rgba(37,38,39,.3); max-width: 90vw; z-index: 100;
+  opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease;
+  border-left: 4px solid var(--brand);
+}
+.toast.is-visible { opacity: 1; transform: translateX(-50%) translateY(0); }

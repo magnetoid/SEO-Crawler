@@ -13,31 +13,46 @@ import { ruleFor } from './rich-results.js';
 import { bareType } from './extract.js';
 
 const SCHEMA_CONTEXT = /schema\.org/i;
-const schemaDocs = (term) => `https://schema.org/${term}`;
+const schemaDocs = (term: string) => `https://schema.org/${term}`;
 
-function mk(layer, message, extra = {}) {
+export interface ValidationFinding {
+  layer: 'structural' | 'vocabulary' | 'rich-results';
+  message: string;
+  prop?: string;
+  detail?: string;
+  docs?: string;
+}
+
+export interface ValidationResult {
+  errors: ValidationFinding[];
+  warnings: ValidationFinding[];
+  passes: ValidationFinding[];
+  typeInfo: Array<{ type: string; known: boolean; description: string; docs: string }>;
+}
+
+function mk(layer: ValidationFinding['layer'], message: string, extra: Partial<ValidationFinding> = {}): ValidationFinding {
   return { layer, message, ...extra };
 }
 
 // All ancestor type names for a type, including itself.
-function typeChain(typeName, vocab) {
+function typeChain(typeName: string, vocab: any): string[] {
   const t = vocab.types?.[typeName];
   if (!t) return [typeName];
   return [typeName, ...(t.ancestors || [])];
 }
 
 // Is `prop` valid on any of these types (or their ancestors)?
-function propAllowedOnTypes(prop, types, vocab) {
+function propAllowedOnTypes(prop: string, types: string[], vocab: any) {
   const def = vocab.properties?.[prop];
   if (!def) return { known: false, allowed: false };
   if (!def.domains || def.domains.length === 0) return { known: true, allowed: true };
-  const allTypes = new Set();
+  const allTypes = new Set<string>();
   for (const t of types) for (const a of typeChain(t, vocab)) allTypes.add(a);
-  const allowed = def.domains.some((d) => allTypes.has(d));
+  const allowed = def.domains.some((d: string) => allTypes.has(d));
   return { known: true, allowed };
 }
 
-const propComment = (prop, vocab) => vocab?.properties?.[prop]?.comment || '';
+const propComment = (prop: string, vocab: any) => vocab?.properties?.[prop]?.comment || '';
 
 // schema.org DataType leaves — when a value is a plain literal these ranges are
 // satisfied, so we never flag text/number/date/url/boolean values.
@@ -48,7 +63,7 @@ const DATA_TYPES = new Set([
 
 // Pull the schema.org type names off an extracted property value. Returns [] for
 // plain literals (strings/numbers/booleans) and for @id-only references.
-function valueTypes(value) {
+function valueTypes(value: any): string[] {
   if (value == null) return [];
   if (typeof value !== 'object') return []; // literal (Text/URL/Number/…)
   const node = value.__item || (value.props ? value : null);
@@ -58,7 +73,7 @@ function valueTypes(value) {
 // Resolve the schema.org type(s) of a property value: a nested entity's own
 // @type, or — for a collapsed {"@id": "..."} reference — the type of the node it
 // points to (via the document's @id map), the way validator.schema.org does.
-function resolveValueTypes(value, idMap) {
+function resolveValueTypes(value: any, idMap: any): string[] {
   const direct = valueTypes(value);
   if (direct.length) return direct;
   if (typeof value === 'string' && idMap && idMap[value]) return idMap[value].map(bareType);
@@ -68,7 +83,7 @@ function resolveValueTypes(value, idMap) {
 // Mirror validator.schema.org: a value's resolved @type must be one of the
 // property's rangeIncludes types (or a subtype). Returns the offending type
 // name, or null if acceptable. Literals (unresolved strings/numbers) are fine.
-function badTargetType(vts, ranges, vocab) {
+function badTargetType(vts: string[], ranges: string[], vocab: any): string | null {
   if (!ranges || ranges.length === 0 || vts.length === 0) return null;
   for (const vt of vts) {
     if (!vocab.types[vt]) return null; // unknown value type — can't judge, stay quiet
@@ -83,8 +98,8 @@ const ALWAYS_OK = new Set(['additionalType', 'id', 'type']);
 
 const MAX_DEPTH = 6;
 
-export function validate(item, vocab) {
-  const acc = { errors: [], warnings: [], passes: [], typeInfo: [] };
+export function validate(item: any, vocab: any): ValidationResult {
+  const acc: ValidationResult = { errors: [], warnings: [], passes: [], typeInfo: [] };
 
   // --- Layer 1: structural (root only) --------------------------------------
   if (item.parseError) {
@@ -148,14 +163,14 @@ export function validate(item, vocab) {
 
 // Layers 2 & 3 for one node, recursing into nested entities. Findings on nested
 // nodes are prefixed with their property path (e.g. "offers → Offer: …").
-function validateNode(node, vocab, idMap, acc, path, depth) {
+function validateNode(node: any, vocab: any, idMap: any, acc: ValidationResult, path: string, depth: number) {
   const { errors, warnings, passes, typeInfo } = acc;
-  const pfx = (m) => (path ? `${path}${m}` : m);
+  const pfx = (m: string) => (path ? `${path}${m}` : m);
   const types = (node.types || []).map(bareType).filter(Boolean);
   const vocabReady = vocab && vocab.types && vocab.properties;
 
   if (types.length && vocabReady) {
-    const knownTypes = [];
+    const knownTypes: string[] = [];
     for (const t of types) {
       const def = vocab.types[t];
       if (depth === 0) typeInfo.push({ type: t, known: !!def, description: def?.comment || '', docs: schemaDocs(t) });
@@ -224,7 +239,7 @@ function validateNode(node, vocab, idMap, acc, path, depth) {
         }));
       }
       for (const group of rule.oneOf || []) {
-        if (group.props.some((p) => present.has(p))) passes.push(mk('rich-results', pfx(`${rule.feature}: satisfies "${group.message}".`)));
+        if (group.props.some((p: string) => present.has(p))) passes.push(mk('rich-results', pfx(`${rule.feature}: satisfies "${group.message}".`)));
         else errors.push(mk('rich-results', pfx(`${rule.feature}: requires ${group.message}.`), {
           docs: rule.docs,
           detail: `${rule.feature} rich results need ${group.message}. Add at least one of: ${group.props.join(', ')}.`,
@@ -247,7 +262,7 @@ function validateNode(node, vocab, idMap, acc, path, depth) {
   if (depth < MAX_DEPTH) {
     for (const [prop, values] of Object.entries(node.props || {})) {
       const arr = Array.isArray(values) ? values : [values];
-      for (const v of arr) {
+      for (const v of arr as any[]) {
         const child = v && typeof v === 'object' ? (v.__item || (v.props ? v : null)) : null;
         if (child && child.props) validateNode(child, vocab, idMap, acc, `${path}${prop} → `, depth + 1);
       }
@@ -255,7 +270,7 @@ function validateNode(node, vocab, idMap, acc, path, depth) {
   }
 }
 
-function hasValue(values) {
+function hasValue(values: any): boolean {
   if (!Array.isArray(values)) return values != null && values !== '';
   return values.some((v) => {
     if (v && v.__item) return true;
@@ -264,7 +279,7 @@ function hasValue(values) {
 }
 
 // Validate every item and produce a per-item report plus rolled-up counts.
-export function validateAll(items, vocab) {
+export function validateAll(items: any[], vocab: any) {
   const reports = items.map((item) => ({ item, result: validate(item, vocab) }));
   const totals = reports.reduce(
     (acc, r) => {

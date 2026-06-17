@@ -6,17 +6,26 @@ import { fileURLToPath } from 'node:url';
 import { DOMParser } from 'linkedom';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const fx = (name) => readFile(path.join(__dirname, 'fixtures', name), 'utf8');
+// Correct path resolution depending on if we are running from dist/test/ or test/
+const isDist = __dirname.includes('dist');
+const fixturesDir = isDist ? path.join(__dirname, '..', '..', 'test', 'fixtures') : path.join(__dirname, 'fixtures');
+const fx = (name: string) => readFile(path.join(fixturesDir, name), 'utf8');
 
-let extract, validate, validateAll, vocab;
+let extract: any, validate: any, validateAll: any, vocab: any;
 before(async () => {
-  globalThis.DOMParser = DOMParser;
-  ({ extract } = await import('../public/extract.js'));
-  ({ validate, validateAll } = await import('../public/validate.js'));
-  vocab = JSON.parse(await readFile(path.join(__dirname, '..', 'public', 'schemaorg-vocab.json'), 'utf8'));
+  (globalThis as any).DOMParser = DOMParser;
+  const extractModule = isDist ? await import('../../dist/public/extract.js' as any) : await import('../public/extract.js' as any);
+  extract = extractModule.extract;
+  
+  const validateModule = isDist ? await import('../../dist/public/validate.js' as any) : await import('../public/validate.js' as any);
+  validate = validateModule.validate;
+  validateAll = validateModule.validateAll;
+  
+  const vocabPath = isDist ? path.join(__dirname, '..', '..', 'public', 'schemaorg-vocab.json') : path.join(__dirname, '..', 'public', 'schemaorg-vocab.json');
+  vocab = JSON.parse(await readFile(vocabPath, 'utf8'));
 });
 
-const hasMsg = (list, re) => list.some((e) => re.test(e.message));
+const hasMsg = (list: any[], re: RegExp) => list.some((e) => re.test(e.message));
 
 test('valid Article: no errors, recognized type, recommended props noted', async () => {
   const { jsonld } = extract(await fx('jsonld-good.html'));
@@ -50,7 +59,7 @@ test('Product without offers/review/aggregateRating triggers Rich Results error'
 
 test('Product with required name + offers passes Rich Results required checks', async () => {
   const { jsonld } = extract(await fx('jsonld-graph.html'));
-  const product = jsonld.find((i) => i.types.includes('Product'));
+  const product = jsonld.find((i: any) => i.types.includes('Product'));
   const { errors, passes } = validate(product, vocab);
   assert.equal(errors.length, 0, JSON.stringify(errors));
   assert.ok(hasMsg(passes, /has required "name"/i));
@@ -69,4 +78,40 @@ test('validateAll rolls up totals across items', async () => {
   assert.equal(reports.length, all.length);
   assert.equal(typeof totals.errors, 'number');
   assert.equal(typeof totals.warnings, 'number');
+});
+
+test('Performance benchmark: complex deep JSON-LD graph does not stack overflow and completes efficiently', () => {
+  // Create a deep JSON-LD graph to test performance and stack safety
+  let deepJson: any = { "@type": "Thing", "name": "Level 0" };
+  let current = deepJson;
+  for (let i = 1; i <= 200; i++) {
+    current.about = { "@type": "Thing", "name": `Level ${i}` };
+    current = current.about;
+  }
+  const item = {
+    format: 'jsonld',
+    types: ['Thing'],
+    props: { about: [deepJson.about] },
+    context: 'https://schema.org',
+    parseError: null
+  };
+  
+  const start = performance.now();
+  const { errors, warnings } = validate(item, vocab);
+  const duration = performance.now() - start;
+  
+  // It shouldn't crash, and should complete quickly
+  assert.ok(duration < 100, `Validation took too long: ${duration}ms`);
+});
+
+test('Google Rich Results: DiscussionForumPosting recognizes required properties', () => {
+  const item = {
+    format: 'jsonld', context: 'https://schema.org',
+    types: ['DiscussionForumPosting'],
+    props: { author: [{ __item: { types: ['Person'], props: { name: ['Alice'] } } }] },
+    parseError: null,
+  };
+  const { errors, passes } = validate(item, vocab);
+  assert.equal(errors.length, 0, JSON.stringify(errors));
+  assert.ok(hasMsg(passes, /has required "author"/i));
 });
