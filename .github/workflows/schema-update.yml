@@ -1,0 +1,57 @@
+name: Schema Rules Auto-Updater
+
+on:
+  schedule:
+    # Run at midnight every Sunday
+    - cron: '0 0 * * 0'
+  workflow_dispatch: # Allow manual triggers from GitHub UI
+
+jobs:
+  update-rules:
+    runs-name: "Update Schema.org & Google Rules"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run rules update script
+        run: npm run update-rules
+
+      - name: Run test suite to verify no regressions
+        run: npm test
+
+      - name: Check for changes
+        id: git-check
+        run: |
+          git diff --exit-code || echo "changes=true" >> $GITHUB_OUTPUT
+
+      - name: Create Pull Request if changes detected
+        if: steps.git-check.outputs.changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore: update schema.org and Google Rich Results rules"
+          title: "Automated: Schema.org & Google Rules Sync"
+          body: |
+            This PR automatically updates the local validation rules to sync with the latest upstream specifications.
+            
+            **Changes:**
+            - Fetched the latest `schemaorg-current-https.jsonld` definitions
+            - Compiled the latest Google Search Central Rich Results criteria
+            
+            **Verification:**
+            - The automated test suite has run and confirmed that existing fixtures continue to parse successfully without breaking the build.
+          branch: chore/update-schema-rules
+          delete-branch: true
