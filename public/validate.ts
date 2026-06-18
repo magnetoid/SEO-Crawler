@@ -154,6 +154,14 @@ export function validate(item: any, vocab: any): ValidationResult {
     return acc;
   }
   acc.passes.push(mk('structural', `Declared type: ${types.join(', ')}.`));
+  if (item.mergedCount && item.mergedCount > 1) {
+    acc.passes.push(mk('structural',
+      `Merged ${item.mergedCount} JSON-LD blocks sharing @id "${item.raw?.['@id']}" into one entity.`, {
+      detail: `This @id was declared in ${item.mergedCount} separate <script>/@graph blocks. Per JSON-LD, same ` +
+        `@id means the same node, so their properties were unioned (as Google and validator.schema.org do). ` +
+        `Consider declaring each entity once to keep the markup lean.`,
+    }));
+  }
 
   // Validate the root node and every nested entity (Google/schema.org validate
   // the whole tree — e.g. the Offer inside a Product).
@@ -163,7 +171,7 @@ export function validate(item: any, vocab: any): ValidationResult {
 
 // Layers 2 & 3 for one node, recursing into nested entities. Findings on nested
 // nodes are prefixed with their property path (e.g. "offers → Offer: …").
-function validateNode(node: any, vocab: any, idMap: any, acc: ValidationResult, path: string, depth: number) {
+function validateNode(node: any, vocab: any, idMap: any, acc: ValidationResult, path: string, depth: number, parentProp = '') {
   const { errors, warnings, passes, typeInfo } = acc;
   const pfx = (m: string) => (path ? `${path}${m}` : m);
   const types = (node.types || []).map(bareType).filter(Boolean);
@@ -228,6 +236,19 @@ function validateNode(node: any, vocab: any, idMap: any, acc: ValidationResult, 
     for (const t of types) {
       const rule = ruleFor(t);
       if (!rule) continue;
+      // Offer price/priceCurrency are Google *merchant-listing* requirements that only
+      // apply to a Product's offer. An Offer inside an OfferCatalog/ItemList (e.g.
+      // Organization/Service → hasOfferCatalog → itemListElement → Offer) is valid
+      // schema.org but not a Google rich result, so emit a soft note, not errors.
+      if (rule.feature === 'Offer' && parentProp === 'itemListElement') {
+        warnings.push(mk('rich-results', pfx(`${rule.feature}: valid schema.org, but not a Google rich result here.`), {
+          docs: rule.docs,
+          detail: `This Offer is inside an OfferCatalog/ItemList (e.g. via hasOfferCatalog), not a Product's offer, ` +
+            `so it is not eligible for a Google merchant-listing rich result and price/priceCurrency are optional. ` +
+            `Google only requires price and priceCurrency for Offers nested in a Product.`,
+        }));
+        continue;
+      }
       const present = new Set(Object.keys(node.props || {}).filter((k) => hasValue(node.props[k])));
       for (const req of rule.required || []) {
         if (present.has(req)) passes.push(mk('rich-results', pfx(`${rule.feature}: has required "${req}".`), { prop: req }));
@@ -264,7 +285,7 @@ function validateNode(node: any, vocab: any, idMap: any, acc: ValidationResult, 
       const arr = Array.isArray(values) ? values : [values];
       for (const v of arr as any[]) {
         const child = v && typeof v === 'object' ? (v.__item || (v.props ? v : null)) : null;
-        if (child && child.props) validateNode(child, vocab, idMap, acc, `${path}${prop} → `, depth + 1);
+        if (child && child.props) validateNode(child, vocab, idMap, acc, `${path}${prop} → `, depth + 1, prop);
       }
     }
   }

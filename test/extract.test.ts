@@ -30,6 +30,24 @@ test('JSON-LD: parses a well-formed Article', async () => {
   assert.deepEqual(jsonld[0].props.author[0].__item.types, ['Person']);
 });
 
+test('JSON-LD: merges nodes that share the same @id across blocks', () => {
+  const html = `
+    <script type="application/ld+json">{"@context":"https://schema.org","@graph":[
+      {"@id":"https://x/#org","@type":"Organization","name":"Acme"},
+      {"@id":"https://x/#site","@type":"WebSite","url":"https://x/"}
+    ]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@graph":[
+      {"@id":"https://x/#org","@type":["Organization","ProfessionalService"],"telephone":"+1-555"}
+    ]}</script>`;
+  const { jsonld } = extract(html);
+  // 3 raw nodes, but #org is declared twice -> 2 unique entities.
+  assert.equal(jsonld.length, 2, 'same-@id nodes are merged into one');
+  const org = jsonld.find((i: any) => i.raw['@id'] === 'https://x/#org');
+  assert.equal(org.mergedCount, 2, 'mergedCount reflects the 2 source blocks');
+  assert.ok(org.types.includes('Organization') && org.types.includes('ProfessionalService'), 'types are unioned');
+  assert.ok(org.props.name && org.props.telephone, 'properties from both blocks are unioned');
+});
+
 test('JSON-LD: captures invalid JSON as a parse error', async () => {
   const { jsonld } = extract(await fx('jsonld-broken.html'));
   assert.equal(jsonld.length, 1);

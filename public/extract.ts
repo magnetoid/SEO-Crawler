@@ -132,7 +132,59 @@ function jsonLdItems(doc: Document) {
       });
     }
   });
-  return items;
+  return mergeJsonLdById(items);
+}
+
+// Per JSON-LD 1.1, two node objects sharing the same @id are the SAME node, so a
+// conforming processor (and Google) unions their properties rather than counting
+// them twice. Pages often re-declare a site-wide node (e.g. #organization) in more
+// than one <script>/@graph block; merge those so the entity count and per-entity
+// property set match validator.schema.org and Google's parser.
+function mergeJsonLdById(items: any[]): any[] {
+  const out: any[] = [];
+  const byId = new Map<string, number>(); // @id -> index in `out`
+  for (const it of items) {
+    const id = !it.parseError && it.raw && typeof it.raw['@id'] === 'string' ? it.raw['@id'] : null;
+    if (id && byId.has(id)) {
+      const target = out[byId.get(id)!];
+      target.raw = mergeRawNodes(target.raw, it.raw);
+      const norm = normalizeJsonLdNode(target.raw);
+      target.types = norm.types;
+      target.props = norm.props;
+      target.context = norm.context ?? target.context;
+      target.source = JSON.stringify(target.raw, null, 2);
+      target.mergedCount = (target.mergedCount || 1) + 1;
+    } else {
+      it.mergedCount = 1;
+      if (id) byId.set(id, out.length);
+      out.push(it);
+    }
+  }
+  return out;
+}
+
+// Union two raw JSON-LD node objects that share an @id: keep @id, union @type, and
+// for every other property concatenate values (deduped by structural equality).
+function mergeRawNodes(a: any, b: any): any {
+  const toArr = (x: any) => (Array.isArray(x) ? x : [x]);
+  const dedupe = (xs: any[]) => {
+    const seen = new Set<string>();
+    const result: any[] = [];
+    for (const x of xs) {
+      const key = JSON.stringify(x);
+      if (!seen.has(key)) { seen.add(key); result.push(x); }
+    }
+    return result.length === 1 ? result[0] : result;
+  };
+  const out: any = { ...a };
+  for (const [k, v] of Object.entries(b)) {
+    if (k === '@id') continue;
+    if (k === '@context') { if (out[k] === undefined) out[k] = v; continue; }
+    if (k === '@type') { out[k] = dedupe([...toArr(out[k] ?? []), ...toArr(v)]); continue; }
+    if (out[k] === undefined) { out[k] = v; continue; }
+    out[k] = dedupe([...toArr(out[k]), ...toArr(v)]);
+  }
+  return out;
 }
 
 // --- Microdata ----------------------------------------------------------------

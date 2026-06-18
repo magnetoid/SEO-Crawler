@@ -69,6 +69,18 @@ test('Offer with priceSpecification (no price) passes', () => {
   assert.equal(richErrors.length, 0, JSON.stringify(richErrors));
 });
 
+test('Offer inside hasOfferCatalog/itemListElement is NOT a Google rich result — no price error', () => {
+  // Organization → hasOfferCatalog → OfferCatalog → itemListElement → Offer (no price).
+  // Google has no rich result for OfferCatalog, so price/priceCurrency must not be required.
+  const offer = { __item: { types: ['Offer'], props: { itemOffered: [{ __item: { types: ['Service'], props: { name: ['Consulting'] } } }] } } };
+  const r = validate(item('Organization', {
+    name: 'Acme',
+    hasOfferCatalog: { __item: { types: ['OfferCatalog'], props: { name: ['Services'], itemListElement: [offer] } } },
+  }), vocab);
+  assert.ok(!hasErr(r, /price/i), 'should not flag price on catalog Offers: ' + errs(r).join(' | '));
+  assert.ok(hasWarn(r, /not a Google rich result/i), 'should add a soft note: ' + r.warnings.map((w) => w.message).join(' | '));
+});
+
 test('Question accepts suggestedAnswer (Q&A), not only acceptedAnswer', () => {
   const r = validate(item('Question', { name: 'Q?', suggestedAnswer: { __item: { types: ['Answer'], props: { text: ['A'] } } } }), vocab);
   assert.ok(!hasErr(r, /acceptedAnswer or suggestedAnswer/));

@@ -834,6 +834,12 @@ function renderSchemaCard({ item, result }, index, rec) {
   head.append(el('span', 'item-type', (item.types && item.types.join(', ')) || (item.parseError ? '(parse error)' : '(no type)')));
   head.append(badge(`${result.errors.length} err`, result.errors.length ? 'error' : 'muted'));
   head.append(badge(`${result.warnings.length} warn`, result.warnings.length ? 'warn' : 'muted'));
+  // Show when this entity was merged from several same-@id blocks (JSON-LD node identity).
+  if (item.mergedCount > 1) {
+    const m = badge(`merged ×${item.mergedCount}`, 'merged');
+    m.title = `Same @id (${(item.raw && item.raw['@id']) || ''}) was declared in ${item.mergedCount} JSON-LD blocks — their properties were unioned into this one entity.`;
+    head.append(m);
+  }
   // Per-item Ask-AI buttons, pinned to the right.
   const ai = el('div', 'ai-buttons ai-buttons-inline');
   for (const p of AI_PROVIDERS) {

@@ -3,3 +3,11 @@ node_modules/
 *.log
 .DS_Store
 dist/
+
+# TypeScript output — compiled in place next to the *.ts sources (run `npm run build`)
+/public/extract.js
+/public/validate.js
+/public/rich-results.js
+/test/extract.test.js
+/test/validate.test.js
+/test/live-api.test.js

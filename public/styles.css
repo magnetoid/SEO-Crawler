@@ -162,6 +162,7 @@ button.primary:disabled { opacity: .55; cursor: progress; }
 .badge-error { background: var(--error-bg); color: var(--error); border-color: var(--error-line); }
 .badge-warn { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-line); }
 .badge-muted { background: #eef0f0; color: var(--muted); }
+.badge-merged { background: #e7f0ff; color: #1a56b8; border-color: #bcd4f5; cursor: help; }
 
 /* ---- Findings ---- */
 .findings { margin: .55rem 0; }
